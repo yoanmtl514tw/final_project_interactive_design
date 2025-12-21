@@ -1,149 +1,161 @@
-//CONSTANTE
-const int potentiometer_pin = A0;
-const int led_pin_1 = 3;
-const int tolerance_nt = 2;
-const int vibrator_pin = 4;
-const int vibrator_time = 2000;
+// --- CONFIGURATION DU MATÉRIEL ---
+const int pin_pot = A0;
+const int pin_bp = 2;
+const int pin_led_g1 = 3;
+const int pin_led_g2 = 8;
+const int pin_led_g3 = 9;
+const int pin_led_r1 = 6;
+const int pin_vibr = 7;
 
-//VARIABLE GLOBALE
-int number_one = 0;
-int number_two = 0;
-int number_three = 0;
-int potentiometer_value_scaled = -1;
-
-int game_stage = 1; //1 = find number one, 2 = find number 2, 3 = find number three and 4 = game finish
-
+// --- VARIABLES DE JEU ---
+int code1, code2, code3;
+int etape = 1; 
+int erreurs = 0;
+const int maxErreurs = 3;
+bool boutonRelache = true;
+bool vibreurFait = false;
 
 void setup()
 {
   Serial.begin(9600);
-  
-  //configuration pin
-  pinMode(led_pin_1,OUTPUT);
-  pinMode(vibrator_pin, OUTPUT);
+  pinMode(pin_bp, INPUT_PULLUP);
+  pinMode(pin_led_g1, OUTPUT);
+  pinMode(pin_led_g2, OUTPUT);
+  digitalWrite(pin_led_g2, HIGH); 
+  pinMode(pin_led_g3, OUTPUT);
+  digitalWrite(pin_led_g3, HIGH); 
+  pinMode(pin_led_r1, OUTPUT);
+  pinMode(pin_vibr, OUTPUT);
 
-  //Obtaining random number
-  randomSeed(analogRead(A0));
-  random_number_generate();
-
-    // 3. Afficher les résultats pour vérification
-  display_target();
-
-  
-
+  genererCombinaison();
+  Serial.println("--- TEST COFFRE-FORT ARDUINO ---");
+  Serial.print("Code a trouver: ");
+  Serial.print(code1); Serial.print(" - ");
+  Serial.print(code2); Serial.print(" - ");
+  Serial.println(code3);
 }
 
 void loop()
 {
-
-  // Lecture et conversion du potentiomètre (0-1023 -> 0-100)
-  int raw_value = analogRead(potentiometer_pin);
-  potentiometer_value_scaled = map(raw_value, 0, 1023, 0, 100);
+  int val_pot = map(analogRead(pin_pot), 0, 1023, 0, 20);
   
-  // Logique principale : on vérifie la valeur en fonction de l'étape actuelle
-  if (game_stage == 1)
+  int cibleActuelle = 0;
+  if (etape == 1) cibleActuelle = code1;
+  else if (etape == 2) cibleActuelle = code2;
+  else if (etape == 3) cibleActuelle = code3;
+
+  //logique du vibreur
+  if (val_pot == cibleActuelle)
   {
-    check_target(number_one, 2);
+    if (!vibreurFait)
+    {
+      Serial.println("Vibration en cours...");
+      digitalWrite(pin_vibr, HIGH);
+      delay(1000);                                          //1SECONDES
+      digitalWrite(pin_vibr, LOW);
+      vibreurFait = true;
+    }
   }
-  else if (game_stage == 2)
+  else
   {
-    check_target(number_two, 3);
-  }
-  else if (game_stage == 3)
-  {
-    check_target(number_three, 4);
-  }
-  else if (game_stage == 4)
-  {
-    digitalWrite(led_pin_1, HIGH); 
+    vibreurFait = false;
   }
 
-  // Affichage du suivi dans le moniteur série
-  // (Utile pour le débug, mais peut être commenté ou supprimé plus tard)
-  Serial.print("Potentiomètre: ");
-  Serial.print(potentiometer_value_scaled);
-  Serial.print(" | Étape : ");
-  Serial.println(game_stage);
+  if (digitalRead(pin_bp) == LOW && boutonRelache)
+  {
+    boutonRelache = false; 
+    verifierSaisie(val_pot, cibleActuelle);
+  }
+  
+  if (digitalRead(pin_bp) == HIGH)
+  {
+    boutonRelache = true;
+  }
 
-  delay(100); // Petite pause pour la stabilité
+  static unsigned long lastPrint = 0;
+  if (millis() - lastPrint > 200)
+  {
+    Serial.print("Pot: "); 
+    Serial.print(val_pot);
+    Serial.print(" | Etape: "); 
+    Serial.print(etape);
+    Serial.print(" | Erreurs: "); 
+    Serial.println(erreurs);
+    lastPrint = millis();
+  }
 }
 
-
-void random_number_generate()
+void verifierSaisie(int saisie, int cible)
 {
-  //between 50 and 100
-  number_one = random(50,101);
-
-  //Less than number one
-  number_two = random(0,number_one);
-
-  //More than number two
-  number_three = random(number_two +1,101);
-}
-
-
-void display_target()
-{
-  Serial.println("--- CIBLES DU JEU (Mode Debug) ---");
-  Serial.print("CHFFRE 1 : ");
-  Serial.println(number_one);
-  Serial.print("CHFFRE 2 : ");
-  Serial.println(number_two);
-  Serial.print("CHFFRE 3 : ");
-  Serial.println(number_three);
-  Serial.println("----------------------------------");
-}
-
-void check_target(int target_value, int next_stage) {
-  // Vérifie si la valeur du potentiomètre est dans la zone de tolérance
-  if (potentiometer_value_scaled >= target_value - tolerance_nt && 
-      potentiometer_value_scaled <= target_value + tolerance_nt) {
-      
-    // CIBLE ATTEINTE
+  if (saisie == cible)
+  {
+    Serial.println("BRAVO ! Chiffre correct.");
+    allumerLedVerte(etape);
+    etape++;
+    vibreurFait = false;
     
-    // Si c'est une nouvelle étape (n'est pas encore l'étape FINALE 4)
-    if (game_stage != next_stage) { 
-        // 1. Démarrer la vibration
-        digitalWrite(vibrator_pin, HIGH);
-        
-        // 2. Allumer la LED (feedback visuel immédiat)
-        digitalWrite(led_pin_1, HIGH);
-        
-        // 3. Annoncer le succès
-        Serial.print(">>> CIBLE TROUVÉE : ");
-        Serial.print(target_value);
-        Serial.println(" --- VIBRATION DÉCLENCHÉE ! ---");
-        
-        // 4. Attendre la durée de la vibration (2 secondes)
-        delay(vibrator_time);
-        
-        // 5. Arrêter la vibration
-        digitalWrite(vibrator_pin, LOW);
-
-        // La LED reste allumée jusqu'à ce que l'utilisateur commence à chercher la prochaine cible.
-        
-        // 6. Passer à l'étape suivante
-        game_stage = next_stage; 
-        
-        if (game_stage <= 3) {
-          Serial.print("ÉTAPE ");
-          Serial.print(game_stage);
-          Serial.println(" : Trouvez la nouvelle valeur !");
-        } else {
-          Serial.println("\n*** BRAVO ! VOUS AVEZ TROUVÉ LES 3 VALEURS ! ***");
-        }
-        
-        // 7. Petite attente supplémentaire avant de reprendre le loop()
-        // Cela empêche l'étape de s'activer plusieurs fois rapidement.
-        delay(500); 
-
-    } // Fin de la condition 'if (game_stage != next_stage)'
-
-  } else {
-    // Si la cible n'est pas atteinte OU si le jeu est terminé (game_stage = 4), la LED est éteinte
-    if (game_stage < 4) {
-      digitalWrite(led_pin_1, LOW);
+    if (etape > 3)
+    {
+      Serial.println("COFFRE OUVERT !");
+      victoireAnim();
+      resetJeu();
+    }
+  }
+  else
+  {
+    erreurs++;
+    clignoterRouge(erreurs);
+    if (erreurs >= maxErreurs)
+    {
+      Serial.println("GAME OVER !");
+      resetJeu();
     }
   }
 }
 
+void allumerLedVerte(int num)
+{
+  if (num == 1) digitalWrite(pin_led_g1, HIGH);
+  if (num == 2) digitalWrite(pin_led_g2, LOW);
+  if (num == 3) digitalWrite(pin_led_g3, LOW);
+}
+
+void clignoterRouge(int nErreurs) {
+  int vitesse = 800 - (nErreurs * 200); 
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(pin_led_r1, HIGH); delay(vitesse / 2);
+    digitalWrite(pin_led_r1, LOW); delay(vitesse / 2);
+  }
+}
+
+void genererCombinaison()
+{
+  randomSeed(analogRead(A5));
+  code1 = random(10, 17);
+  code2 = random(0, code1);
+  code3 = random(code2 + 1, 17);
+}
+
+void resetJeu()
+{
+  delay(1000);
+  digitalWrite(pin_led_g1, LOW);
+  digitalWrite(pin_led_g2, HIGH);
+  digitalWrite(pin_led_g3, HIGH);
+  digitalWrite(pin_led_r1, LOW);
+  etape = 1;
+  erreurs = 0;
+  vibreurFait = false;
+  genererCombinaison();
+  Serial.println("Nouveau code : " + String(code1) + "-" + String(code2) + "-" + String(code3));
+}
+
+void victoireAnim()
+{
+  for (int i = 0; i < 10; i++) {
+    digitalWrite(pin_led_g1, LOW); digitalWrite(pin_led_g2, HIGH); digitalWrite(pin_led_g3, HIGH);
+    delay(100);
+    digitalWrite(pin_led_g1, HIGH); digitalWrite(pin_led_g2, LOW); digitalWrite(pin_led_g3, LOW);
+    delay(100);
+  }
+}
