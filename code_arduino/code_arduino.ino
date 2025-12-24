@@ -5,14 +5,19 @@ const int pin_led_green1 = 3;
 const int pin_led_green2 = 8;
 const int pin_led_green3 = 9;
 const int pin_led_red1 = 6;
-const int pin_vibration = 7;
+const int pin_vibration = 5;
 
 // --- GAME CONSTANTS ---
 const int maxErrors = 3;
-const int dialPositions = 20; // Number range: 0-20
-const int debounceDelay = 50; // Button debounce time in ms
-const int vibrationDuration = 1000; // Vibration time in ms
-const int serialUpdateInterval = 100; // Min time between serial updates
+const int dialPositions = 10; // 0-10 range
+
+// CALIBRATION - Adjust POT_MAX until you can reach 10
+const int POT_MIN = 0;
+const int POT_MAX = 850; // Lower this if you can't reach 10
+
+const int debounceDelay = 50;
+const int vibrationDuration = 1000;
+const int serialUpdateInterval = 100;
 
 // --- GAME VARIABLES ---
 int code1, code2, code3;
@@ -37,23 +42,22 @@ void setup()
   pinMode(pin_led_green3, OUTPUT);
   digitalWrite(pin_led_green3, HIGH); 
   pinMode(pin_led_red1, OUTPUT);
-  pinMode(pin_vibration, OUTPUT);
 
   generateCombination();
-  
-  // Wait a moment for serial connection to establish
   delay(1000);
-  
-  // Send initial state to Unity
   sendCurrentState();
 }
 
 void loop()
 {
-  int potValue = map(analogRead(pin_pot), 0, 1023, 0, dialPositions);
+  // Read and calibrate potentiometer
+  int rawPot = analogRead(pin_pot);
+  int constrainedValue = constrain(rawPot, POT_MIN, POT_MAX);
+  int potValue = map(constrainedValue, POT_MIN, POT_MAX, 0, dialPositions);
+  
+  unsigned long currentMillis = millis();
   
   // Send potentiometer position to Unity with rate limiting
-  unsigned long currentMillis = millis();
   if (potValue != lastPositionSent && (currentMillis - lastSerialUpdate >= serialUpdateInterval))
   {
     Serial.print("POT:");
@@ -67,31 +71,33 @@ void loop()
   else if (currentStep == 2) currentTarget = code2;
   else if (currentStep == 3) currentTarget = code3;
 
-  // NON-BLOCKING vibration motor logic
+  // CONSTANT vibration motor logic
   if (potValue == currentTarget)
   {
     if (!vibrationActive)
     {
-      digitalWrite(pin_vibration, HIGH);
       vibrationActive = true;
       vibrationStartTime = currentMillis;
+      analogWrite(pin_vibration, 255);
+      Serial.println("Vibration started!");
     }
   }
   else
   {
-    // Turn off vibration if we move away from target
     if (vibrationActive)
     {
-      digitalWrite(pin_vibration, LOW);
+      analogWrite(pin_vibration, 0);
       vibrationActive = false;
+      Serial.println("Vibration stopped");
     }
   }
   
   // Check if vibration duration has elapsed
   if (vibrationActive && (currentMillis - vibrationStartTime >= vibrationDuration))
   {
-    digitalWrite(pin_vibration, LOW);
+    analogWrite(pin_vibration, 0);
     vibrationActive = false;
+    Serial.println("Vibration timeout");
   }
 
   // Button press detection with debouncing
@@ -106,6 +112,19 @@ void loop()
   {
     buttonReleased = true;
   }
+
+  // Debug output
+  static unsigned long lastPrint = 0;
+  if (millis() - lastPrint > 500)
+  {
+    Serial.print("Raw: ");
+    Serial.print(rawPot);
+    Serial.print(" | Pot: "); 
+    Serial.print(potValue);
+    Serial.print(" | Target: "); 
+    Serial.println(currentTarget);
+    lastPrint = millis();
+  }
 }
 
 void checkInput(int input, int target)
@@ -117,8 +136,7 @@ void checkInput(int input, int target)
     Serial.println(currentStep);
     currentStep++;
     
-    // Reset vibration state
-    digitalWrite(pin_vibration, LOW);
+    analogWrite(pin_vibration, 0);
     vibrationActive = false;
     
     if (currentStep > 3)
@@ -133,6 +151,10 @@ void checkInput(int input, int target)
     errors++;
     Serial.print("ERROR:");
     Serial.println(errors);
+    Serial.print("You entered: ");
+    Serial.print(input);
+    Serial.print(" | Target was: ");
+    Serial.println(target);
     blinkRedLED(errors);
     if (errors >= maxErrors)
     {
@@ -152,7 +174,7 @@ void turnOnGreenLED(int stepNumber)
 void blinkRedLED(int numErrors) 
 {
   int speed = 800 - (numErrors * 200); 
-  if (speed < 200) speed = 200; // Safety check
+  if (speed < 200) speed = 200;
   
   for (int i = 0; i < 3; i++) 
   {
@@ -166,11 +188,10 @@ void blinkRedLED(int numErrors)
 void generateCombination()
 {
   randomSeed(analogRead(A5));
-  code1 = random(10, 17);
-  code2 = random(0, code1);
-  code3 = random(code2 + 1, 17);
+  code1 = random(5, dialPositions + 1);    // 5 to 10
+  code2 = random(0, code1);                 // 0 to code1
+  code3 = random(code2 + 1, dialPositions + 1); // code2+1 to 10
   
-  // Send code to Unity
   Serial.print("CODE:");
   Serial.print(code1);
   Serial.print(",");
@@ -181,7 +202,6 @@ void generateCombination()
 
 void sendCurrentState()
 {
-  // Send current combination
   Serial.print("CODE:");
   Serial.print(code1);
   Serial.print(",");
@@ -189,7 +209,6 @@ void sendCurrentState()
   Serial.print(",");
   Serial.println(code3);
   
-  // Send current step and errors
   Serial.print("STEP:");
   Serial.println(currentStep);
   Serial.print("ERRORS:");
@@ -203,7 +222,7 @@ void resetGame()
   digitalWrite(pin_led_green2, HIGH);
   digitalWrite(pin_led_green3, HIGH);
   digitalWrite(pin_led_red1, LOW);
-  digitalWrite(pin_vibration, LOW);
+  analogWrite(pin_vibration, 0);
   
   currentStep = 1;
   errors = 0;
