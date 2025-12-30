@@ -13,7 +13,7 @@ const int dialPositions = 10; // 0-10 range
 
 // CALIBRATION - Adjust POT_MAX until you can reach 10
 const int POT_MIN = 0;
-const int POT_MAX = 850; // Lower this if you can't reach 10
+const int POT_MAX = 850;
 
 const int debounceDelay = 50;
 const int vibrationDuration = 1000;
@@ -38,9 +38,9 @@ void setup()
   pinMode(pin_button, INPUT_PULLUP);
   pinMode(pin_led_green1, OUTPUT);
   pinMode(pin_led_green2, OUTPUT);
-  digitalWrite(pin_led_green2, HIGH); 
+  //digitalWrite(pin_led_green2, HIGH); 
   pinMode(pin_led_green3, OUTPUT);
-  digitalWrite(pin_led_green3, HIGH); 
+  //digitalWrite(pin_led_green3, HIGH); 
   pinMode(pin_led_red1, OUTPUT);
 
   generateCombination();
@@ -167,8 +167,10 @@ void checkInput(int input, int target)
 void turnOnGreenLED(int stepNumber)
 {
   if (stepNumber == 1) digitalWrite(pin_led_green1, HIGH);
-  if (stepNumber == 2) digitalWrite(pin_led_green2, LOW);
-  if (stepNumber == 3) digitalWrite(pin_led_green3, LOW);
+  //if (stepNumber == 2) digitalWrite(pin_led_green2, LOW);
+  //if (stepNumber == 3) digitalWrite(pin_led_green3, LOW);
+  if (stepNumber == 2) digitalWrite(pin_led_green2, HIGH);
+  if (stepNumber == 3) digitalWrite(pin_led_green3, HIGH);
 }
 
 void blinkRedLED(int numErrors) 
@@ -217,10 +219,12 @@ void sendCurrentState()
 
 void resetGame()
 {
-  delay(1000);
+  delay(5000);
   digitalWrite(pin_led_green1, LOW);
-  digitalWrite(pin_led_green2, HIGH);
-  digitalWrite(pin_led_green3, HIGH);
+  //digitalWrite(pin_led_green2, HIGH);
+  //digitalWrite(pin_led_green3, HIGH);
+  digitalWrite(pin_led_green2, LOW);
+  digitalWrite(pin_led_green3, LOW);
   digitalWrite(pin_led_red1, LOW);
   analogWrite(pin_vibration, 0);
   
@@ -236,13 +240,19 @@ void victoryAnimation()
 {
   for (int i = 0; i < 10; i++) 
   {
+    //digitalWrite(pin_led_green1, LOW); 
+    //digitalWrite(pin_led_green2, HIGH); 
+    //digitalWrite(pin_led_green3, HIGH);
     digitalWrite(pin_led_green1, LOW); 
-    digitalWrite(pin_led_green2, HIGH); 
-    digitalWrite(pin_led_green3, HIGH);
-    delay(100);
-    digitalWrite(pin_led_green1, HIGH); 
     digitalWrite(pin_led_green2, LOW); 
     digitalWrite(pin_led_green3, LOW);
+    delay(100);
+    //digitalWrite(pin_led_green1, HIGH); 
+    //digitalWrite(pin_led_green2, LOW); 
+    //digitalWrite(pin_led_green3, LOW);
+    digitalWrite(pin_led_green1, HIGH); 
+    digitalWrite(pin_led_green2, HIGH); 
+    digitalWrite(pin_led_green3, HIGH);
     delay(100);
   }
 }
